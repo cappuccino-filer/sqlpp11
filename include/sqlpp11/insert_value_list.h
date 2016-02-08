@@ -664,7 +664,7 @@ namespace sqlpp
         interpret_list(t._dynamic_values, ',', context);
         context << ")";
 		if (t.on_dup_update_skips_ > 0) {
-			context << " ON DUPLICATE UPDATE ";
+			context << " ON DUPLICATE KEY UPDATE ";
 			interpret_tuple_since(t._assignments, ",", context, t.on_dup_update_skips_);
 #if 0
 			if (sizeof...(Assignments) and not t._dynamic_columns.empty())
