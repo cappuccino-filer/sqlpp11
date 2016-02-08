@@ -1,5 +1,7 @@
-sqlpp11
+A fork of sqlpp11 for MariaDB
 =======
+
+This forks aims to add neat features introduced by MySQL/MariaDB through quick patches, which is unlikely to be accepted by upstream without redesign.
 
 Branch / Compiler | clang-3.4,  gcc-4.9, Xcode-7   |  MSVC 2015  | Test Coverage 
 ------------------| -------------------------------|-------------|---------------
