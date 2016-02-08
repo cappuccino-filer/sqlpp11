@@ -53,7 +53,8 @@ int Insert(int, char* [])
   }
 
   db(insert_into(t).default_values());
-  db(insert_into(t).set(t.gamma = true, t.beta = "kirschauflauf"));
+  db(insert_into(t).set(t.gamma = true, t.beta = "kirschauflauf"));//.update_on_dup(t.gamma=false));
+  db(insert_into(t).set_or_update(1, t.gamma = true, t.beta = "kirschauflauf"));//.update_on_dup(t.gamma=false));
 
   serialize(insert_into(t).default_values(), printer).str();
 

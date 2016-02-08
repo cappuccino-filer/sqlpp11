@@ -123,8 +123,11 @@ namespace sqlpp
   template <typename Database, typename... Assignments>
   struct insert_list_data_t
   {
-    insert_list_data_t(Assignments... assignments)
-        : _assignments(assignments...), _columns(assignments._lhs...), _values(assignments._rhs...)
+    insert_list_data_t(int nskips, Assignments... assignments)
+        : _assignments(assignments...),
+		_columns(assignments._lhs...),
+		_values(assignments._rhs...),
+		on_dup_update_skips_(nskips)
     {
     }
 
@@ -140,6 +143,8 @@ namespace sqlpp
     std::tuple<rhs_t<Assignments>...> _values;
     interpretable_list_t<Database> _dynamic_columns;
     interpretable_list_t<Database> _dynamic_values;
+
+	int on_dup_update_skips_;
   };
 
   SQLPP_PORTABLE_STATIC_ASSERT(assert_insert_set_assignments_t, "at least one argument is not an assignment in set()");
@@ -522,7 +527,7 @@ namespace sqlpp
         using Check = check_insert_static_set_t<Assignments...>;
         Check{}._();
 
-        return _set_impl<void>(Check{}, assignments...);
+        return _set_impl<void>(Check{}, -1, assignments...);
       }
 
       template <typename... Assignments>
@@ -533,7 +538,28 @@ namespace sqlpp
         using Check = check_insert_dynamic_set_t<_database_t, Assignments...>;
         Check{}._();
 
-        return _set_impl<_database_t>(Check{}, assignments...);
+        return _set_impl<_database_t>(Check{}, -1, assignments...);
+      }
+
+      template <typename... Assignments>
+      auto set_or_update(int nskips, Assignments... assignments) const
+          -> _new_statement_t<check_insert_static_set_t<Assignments...>, insert_list_t<void, Assignments...>>
+      {
+        using Check = check_insert_static_set_t<Assignments...>;
+        Check{}._();
+
+        return _set_impl<void>(Check{}, nskips, assignments...);
+      }
+
+      template <typename... Assignments>
+      auto dynamic_set_or_update(int nskips, Assignments... assignments) const
+          -> _new_statement_t<check_insert_dynamic_set_t<_database_t, Assignments...>,
+                              insert_list_t<_database_t, Assignments...>>
+      {
+        using Check = check_insert_dynamic_set_t<_database_t, Assignments...>;
+        Check{}._();
+
+        return _set_impl<_database_t>(Check{}, nskips, assignments...);
       }
 
     private:
@@ -558,14 +584,14 @@ namespace sqlpp
       }
 
       template <typename Database, typename... Assignments>
-      auto _set_impl(std::false_type, Assignments... assignments) const -> bad_statement;
+      auto _set_impl(std::false_type, int, Assignments... assignments) const -> bad_statement;
 
       template <typename Database, typename... Assignments>
-      auto _set_impl(std::true_type, Assignments... assignments) const
+      auto _set_impl(std::true_type, int nskips, Assignments... assignments) const
           -> _new_statement_t<std::true_type, insert_list_t<Database, Assignments...>>
       {
         return {static_cast<const derived_statement_t<Policies>&>(*this),
-                insert_list_data_t<Database, Assignments...>{assignments...}};
+                insert_list_data_t<Database, Assignments...>{nskips, assignments...}};
       }
     };
   };
@@ -637,6 +663,15 @@ namespace sqlpp
           context << ',';
         interpret_list(t._dynamic_values, ',', context);
         context << ")";
+		if (t.on_dup_update_skips_ > 0) {
+			context << " ON DUPLICATE UPDATE ";
+			interpret_tuple_since(t._assignments, ",", context, t.on_dup_update_skips_);
+#if 0
+			if (sizeof...(Assignments) and not t._dynamic_columns.empty())
+				context << ',';
+			interpret_list_without_primary_key(t._dynamic_assignments, ',', context);
+#endif
+		}
       }
       return context;
     }

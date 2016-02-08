@@ -34,11 +34,23 @@
 
 namespace sqlpp
 {
-  template <typename Element, typename Separator, typename Context, typename UseBraces>
+  template <typename Element, typename Separator, typename Context, typename UseBraces, typename Skips>
   static void interpret_tuple_element(
-      const Element& element, const Separator& separator, Context& context, const UseBraces&, size_t index)
+      const Element& element,
+	  const Separator& separator,
+	  Context& context,
+	  const UseBraces&,
+	  const Skips&,
+	  int nskips,
+	  size_t index)
   {
-    if (index)
+	(void)nskips;
+    if (Skips::value) {
+		if (index < size_t(nskips))
+			return;
+		if (index > size_t(nskips))
+			context << separator;
+	} else if (index)
       context << separator;
     if (UseBraces::value)
       serialize_operand(element, context);
@@ -46,11 +58,13 @@ namespace sqlpp
       serialize(element, context);
   }
 
-  template <typename Tuple, typename Separator, typename Context, typename UseBraces, size_t... Is>
+  template <typename Tuple, typename Separator, typename Context, typename UseBraces, typename Skips, size_t... Is>
   auto interpret_tuple_impl(const Tuple& t,
                             const Separator& separator,
                             Context& context,
                             const UseBraces& useBraces,
+                            const Skips& doSkip,
+							int nskips,
                             const detail::index_sequence<Is...>&) -> Context &
   {
     // Note: A braced-init-list does guarantee the order of evaluation according to 12.6.1 [class.explicit.init]
@@ -59,23 +73,38 @@ namespace sqlpp
     // See also: "http://stackoverflow.com/questions/6245735/pretty-print-stdtuple/6245777#6245777"
     // Beware of gcc-bug: "http://gcc.gnu.org/bugzilla/show_bug.cgi?id=51253", otherwise an empty swallow struct could
     // be used
+	(void)nskips;
     using swallow = int[];
     (void)swallow{0,  // workaround against -Wpedantic GCC warning "zero-size array 'int [0]'"
-                  (interpret_tuple_element(std::get<Is>(t), separator, context, useBraces, Is), 0)...};
+                  (interpret_tuple_element(
+					std::get<Is>(t),
+					separator,
+					context,
+					useBraces,
+					doSkip,
+					nskips,
+					Is), 0)...};
     return context;
   }
 
   template <typename Tuple, typename Separator, typename Context>
   auto interpret_tuple(const Tuple& t, const Separator& separator, Context& context) -> Context &
   {
-    return interpret_tuple_impl(t, separator, context, std::true_type{},
+    return interpret_tuple_impl(t, separator, context, std::true_type{}, std::false_type{}, 0,
+                                detail::make_index_sequence<std::tuple_size<Tuple>::value>{});
+  }
+
+  template <typename Tuple, typename Separator, typename Context>
+  auto interpret_tuple_since(const Tuple& t, const Separator& separator, Context& context, int nskips) -> Context &
+  {
+    return interpret_tuple_impl(t, separator, context, std::true_type{}, std::true_type{}, nskips,
                                 detail::make_index_sequence<std::tuple_size<Tuple>::value>{});
   }
 
   template <typename Tuple, typename Separator, typename Context>
   auto interpret_tuple_without_braces(const Tuple& t, const Separator& separator, Context& context) -> Context &
   {
-    return interpret_tuple_impl(t, separator, context, std::false_type{},
+    return interpret_tuple_impl(t, separator, context, std::false_type{}, std::false_type{}, 0,
                                 detail::make_index_sequence<std::tuple_size<Tuple>::value>{});
   }
 }
